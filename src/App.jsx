@@ -17,6 +17,10 @@ import Maintenance from './pages/Maintenance'
 import Reports from './pages/Reports'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
+import Kits from './pages/Kits'
+import Calendar from './pages/Calendar'
+import AuditLog from './pages/AuditLog'
+import EquipmentStatus from './pages/EquipmentStatus'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -80,7 +84,11 @@ function App() {
               <Route path="checkin" element={<Checkin />} />
               <Route path="scanner" element={<Scanner />} />
               <Route path="crew-checkout" element={<CrewCheckout />} />
+              <Route path="kits" element={<Kits />} />
+              <Route path="calendar" element={<Calendar />} />
               <Route path="requests" element={<Requests />} />
+              <Route path="status" element={<EquipmentStatus />} />
+              <Route path="audit-log" element={<AuditLog />} />
               <Route path="maintenance" element={<Maintenance />} />
               <Route path="reports" element={<Reports />} />
               <Route path="users" element={<Users />} />

@@ -18,7 +18,9 @@ import {
   Camera,
   Upload,
   Image,
-  Trash2
+  Trash2,
+  MessageCircle,
+  Send
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 
@@ -41,10 +43,12 @@ export default function Checkout() {
 
   const [form, setForm] = useState({
     borrower_name: '',
+    borrower_phone: '',
     expected_return_date: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
     purpose: '',
     notes: ''
   })
+  const [sendWhatsApp, setSendWhatsApp] = useState(true)
 
   useEffect(() => {
     loadData()
@@ -160,6 +164,15 @@ export default function Checkout() {
       })
 
       toast.success(`${selectedAsset.asset_name} checked out successfully`)
+
+      // Send WhatsApp message if enabled and phone number provided
+      if (sendWhatsApp && form.borrower_phone) {
+        const cleanPhone = form.borrower_phone.replace(/[^0-9]/g, '')
+        const message = `Hi ${form.borrower_name},%0A%0AThe following equipment has been checked out to you:%0A%0A*${selectedAsset.asset_name}*%0AID: ${selectedAsset.asset_id}%0ACategory: ${selectedAsset.category}%0A%0AExpected Return: ${format(new Date(form.expected_return_date), 'MMMM d, yyyy')}%0APurpose: ${form.purpose || 'Not specified'}%0A%0APlease take care of the equipment and return it on time.%0A%0A- NeoFox Media Equipment Team`
+
+        window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank')
+      }
+
       navigate('/assets')
     } catch (error) {
       toast.error(error.message || 'Failed to checkout')
@@ -301,6 +314,34 @@ export default function Checkout() {
                   <option key={b} value={b} />
                 ))}
               </datalist>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Phone Number (WhatsApp)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  value={form.borrower_phone}
+                  onChange={(e) => setForm({ ...form, borrower_phone: e.target.value })}
+                  className="input-field flex-1"
+                  placeholder="+91 98765 43210"
+                />
+                <label className="flex items-center gap-2 px-3 py-2 bg-neofox-darker rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendWhatsApp}
+                    onChange={(e) => setSendWhatsApp(e.target.checked)}
+                    className="w-4 h-4 rounded border-neofox-gray text-green-500 focus:ring-green-500"
+                  />
+                  <MessageCircle className="w-4 h-4 text-green-400" />
+                  <span className="text-sm text-gray-300">Send</span>
+                </label>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Equipment list will be sent via WhatsApp to this number
+              </p>
             </div>
 
             <div>

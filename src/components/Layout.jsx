@@ -18,21 +18,31 @@ import {
   ChevronDown,
   UserCircle,
   ClipboardList,
-  Users2
+  Users2,
+  Boxes,
+  Calendar,
+  Activity,
+  History
 } from 'lucide-react'
 
+// Navigation items with role-based access
+// roles: 'all' = everyone, 'manager' = admin + equipment_manager, 'admin' = admin only
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Equipment', href: '/assets', icon: Package },
-  { name: 'QR Scanner', href: '/scanner', icon: QrCode },
-  { name: 'Check Out', href: '/checkout', icon: LogOutIcon },
-  { name: 'Check In', href: '/checkin', icon: LogIn },
-  { name: 'Crew Checkout', href: '/crew-checkout', icon: Users2 },
-  { name: 'Requests', href: '/requests', icon: ClipboardList },
-  { name: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { name: 'Reports', href: '/reports', icon: FileText },
-  { name: 'Users', href: '/users', icon: Users, adminOnly: true },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard, roles: 'all' },
+  { name: 'Equipment', href: '/assets', icon: Package, roles: 'all' },
+  { name: 'Equipment Status', href: '/status', icon: Activity, roles: 'manager' },
+  { name: 'Kits', href: '/kits', icon: Boxes, roles: 'manager' },
+  { name: 'Calendar', href: '/calendar', icon: Calendar, roles: 'all' },
+  { name: 'QR Scanner', href: '/scanner', icon: QrCode, roles: 'manager' },
+  { name: 'Check Out', href: '/checkout', icon: LogOutIcon, roles: 'manager' },
+  { name: 'Check In', href: '/checkin', icon: LogIn, roles: 'manager' },
+  { name: 'Crew Checkout', href: '/crew-checkout', icon: Users2, roles: 'manager' },
+  { name: 'Requests', href: '/requests', icon: ClipboardList, roles: 'all' },
+  { name: 'Maintenance', href: '/maintenance', icon: Wrench, roles: 'manager' },
+  { name: 'Reports', href: '/reports', icon: FileText, roles: 'manager' },
+  { name: 'Audit Log', href: '/audit-log', icon: History, roles: 'manager' },
+  { name: 'Users', href: '/users', icon: Users, roles: 'admin' },
+  { name: 'Settings', href: '/settings', icon: Settings, roles: 'all' },
 ]
 
 export default function Layout() {
@@ -46,7 +56,14 @@ export default function Layout() {
     setSidebarOpen(false)
   }, [location.pathname])
 
-  const filteredNavigation = navigation.filter(item => !item.adminOnly || isAdmin())
+  // Filter navigation based on user role
+  const filteredNavigation = navigation.filter(item => {
+    const userRole = user?.role || 'team_member'
+    if (item.roles === 'all') return true
+    if (item.roles === 'admin') return userRole === 'admin'
+    if (item.roles === 'manager') return userRole === 'admin' || userRole === 'equipment_manager'
+    return false
+  })
 
   return (
     <div className="min-h-screen bg-neofox-darker">

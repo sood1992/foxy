@@ -29,6 +29,7 @@ require_once __DIR__ . '/utils/JsonDatabase.php';
 require_once __DIR__ . '/utils/Auth.php';
 require_once __DIR__ . '/utils/EmailService.php';
 require_once __DIR__ . '/utils/Response.php';
+require_once __DIR__ . '/utils/AuditLog.php';
 
 // Parse request
 $method = $_SERVER['REQUEST_METHOD'];
@@ -81,6 +82,30 @@ try {
         case 'stats':
             require_once __DIR__ . '/routes/stats.php';
             handleStats($method, $id, $action);
+            break;
+
+        case 'kits':
+            require_once __DIR__ . '/routes/kits.php';
+            handleKits($method, $id, $action);
+            break;
+
+        case 'reservations':
+            require_once __DIR__ . '/routes/reservations.php';
+            handleReservations($method, $id, $action);
+            break;
+
+        case 'audit':
+            Auth::requireAuth();
+            $filters = [
+                'action' => $_GET['action'] ?? '',
+                'user' => $_GET['user'] ?? '',
+                'dateFrom' => $_GET['dateFrom'] ?? '',
+                'dateTo' => $_GET['dateTo'] ?? '',
+                'page' => $_GET['page'] ?? 1,
+                'limit' => $_GET['limit'] ?? 50
+            ];
+            $logs = AuditLog::getLogs($filters);
+            Response::json(['logs' => $logs]);
             break;
 
         default:

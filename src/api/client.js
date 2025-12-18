@@ -103,6 +103,27 @@ export const assetApi = {
   uploadPhoto: (id, formData) => api.upload(`/assets/${id}/photos`, formData),
   getCategories: () => api.get('/assets/categories'),
   search: (query) => api.get(`/assets/search?q=${encodeURIComponent(query)}`),
+  getUsers: () => api.get('/users'),
+
+  // Kits
+  getKits: () => api.get('/kits'),
+  getKit: (id) => api.get(`/kits/${id}`),
+  createKit: (data) => api.post('/kits', data),
+  updateKit: (id, data) => api.put(`/kits/${id}`, data),
+  deleteKit: (id) => api.delete(`/kits/${id}`),
+
+  // Reservations
+  getReservations: () => api.get('/reservations'),
+  createReservation: (data) => api.post('/reservations', data),
+  approveReservation: (id) => api.post(`/reservations/${id}/approve`),
+  rejectReservation: (id, data) => api.post(`/reservations/${id}/reject`, data),
+  cancelReservation: (id) => api.delete(`/reservations/${id}`),
+
+  // Audit Log
+  getAuditLog: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return api.get(`/audit${query ? `?${query}` : ''}`)
+  },
 }
 
 // Transaction API
