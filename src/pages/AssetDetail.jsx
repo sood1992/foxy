@@ -288,6 +288,26 @@ export default function AssetDetail() {
                       <option value="needs_repair">Needs Repair</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Storage Location</label>
+                    <input
+                      type="text"
+                      value={editForm.storage_location || ''}
+                      onChange={(e) => setEditForm({ ...editForm, storage_location: e.target.value })}
+                      className="input-field"
+                      placeholder="e.g., Room A, Warehouse 1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Shelf / Area</label>
+                    <input
+                      type="text"
+                      value={editForm.shelf || ''}
+                      onChange={(e) => setEditForm({ ...editForm, shelf: e.target.value })}
+                      className="input-field"
+                      placeholder="e.g., Shelf 3, Cabinet B"
+                    />
+                  </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
                     <textarea
@@ -327,6 +347,14 @@ export default function AssetDetail() {
                   <div>
                     <p className="text-sm text-gray-500">Total Checkouts</p>
                     <p className="font-medium mt-1">{asset.total_checkouts || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Storage Location</p>
+                    <p className="font-medium mt-1">{asset.storage_location || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Shelf / Area</p>
+                    <p className="font-medium mt-1">{asset.shelf || '—'}</p>
                   </div>
                   {asset.description && (
                     <div className="md:col-span-2">

@@ -20,7 +20,8 @@ import {
   Image,
   Trash2,
   MessageCircle,
-  Send
+  Send,
+  Briefcase
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 
@@ -45,10 +46,12 @@ export default function Checkout() {
     borrower_name: '',
     borrower_phone: '',
     expected_return_date: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
+    project: '',
     purpose: '',
     notes: ''
   })
   const [sendWhatsApp, setSendWhatsApp] = useState(true)
+  const [generateReceipt, setGenerateReceipt] = useState(true)
 
   useEffect(() => {
     loadData()
@@ -155,9 +158,10 @@ export default function Checkout() {
       }
 
       // Now checkout with photo paths
-      await assetApi.checkout(selectedAsset.asset_id, {
+      const result = await assetApi.checkout(selectedAsset.asset_id, {
         borrower_name: form.borrower_name,
         expected_return_date: form.expected_return_date,
+        project: form.project,
         purpose: form.purpose,
         notes: form.notes,
         photos: uploadedPhotoPaths
@@ -168,12 +172,29 @@ export default function Checkout() {
       // Send WhatsApp message if enabled and phone number provided
       if (sendWhatsApp && form.borrower_phone) {
         const cleanPhone = form.borrower_phone.replace(/[^0-9]/g, '')
-        const message = `Hi ${form.borrower_name},%0A%0AThe following equipment has been checked out to you:%0A%0A*${selectedAsset.asset_name}*%0AID: ${selectedAsset.asset_id}%0ACategory: ${selectedAsset.category}%0A%0AExpected Return: ${format(new Date(form.expected_return_date), 'MMMM d, yyyy')}%0APurpose: ${form.purpose || 'Not specified'}%0A%0APlease take care of the equipment and return it on time.%0A%0A- NeoFox Media Equipment Team`
+        const message = `Hi ${form.borrower_name},%0A%0AThe following equipment has been checked out to you:%0A%0A*${selectedAsset.asset_name}*%0AID: ${selectedAsset.asset_id}%0ACategory: ${selectedAsset.category}%0AProject: ${form.project || 'Not specified'}%0A%0AExpected Return: ${format(new Date(form.expected_return_date), 'MMMM d, yyyy')}%0APurpose: ${form.purpose || 'Not specified'}%0A%0APlease take care of the equipment and return it on time.%0A%0A- NeoFox Media Equipment Team`
 
         window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank')
       }
 
-      navigate('/assets')
+      // Navigate to receipt page or assets
+      if (generateReceipt) {
+        navigate('/checkout/receipt', {
+          state: {
+            checkoutData: {
+              asset: selectedAsset,
+              borrower: form.borrower_name,
+              returnDate: form.expected_return_date,
+              project: form.project,
+              purpose: form.purpose,
+              notes: form.notes,
+              transactionId: result.transaction_id
+            }
+          }
+        })
+      } else {
+        navigate('/assets')
+      }
     } catch (error) {
       toast.error(error.message || 'Failed to checkout')
     } finally {
@@ -359,13 +380,28 @@ export default function Checkout() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Purpose / Project</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                <Briefcase className="w-4 h-4 inline mr-1" />
+                Project Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.project}
+                onChange={(e) => setForm({ ...form, project: e.target.value })}
+                className="input-field"
+                placeholder="e.g., Wedding - Sharma, Corporate Video - TechCorp"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Purpose / Use</label>
               <input
                 type="text"
                 value={form.purpose}
                 onChange={(e) => setForm({ ...form, purpose: e.target.value })}
                 className="input-field"
-                placeholder="e.g., Product shoot, Wedding, etc."
+                placeholder="e.g., Main camera, B-roll, Audio recording"
               />
             </div>
 
@@ -378,6 +414,22 @@ export default function Checkout() {
                 className="input-field"
                 placeholder="Any additional notes"
               />
+            </div>
+
+            {/* Receipt Option */}
+            <div className="pt-2 border-t border-neofox-gray">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={generateReceipt}
+                  onChange={(e) => setGenerateReceipt(e.target.checked)}
+                  className="w-4 h-4 rounded border-neofox-gray text-neofox-yellow focus:ring-neofox-yellow"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-300">Generate Receipt</span>
+                  <p className="text-xs text-gray-500">Create a printable PDF receipt with signatures</p>
+                </div>
+              </label>
             </div>
           </div>
         </div>

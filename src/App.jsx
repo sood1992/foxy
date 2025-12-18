@@ -21,6 +21,8 @@ import Kits from './pages/Kits'
 import Calendar from './pages/Calendar'
 import AuditLog from './pages/AuditLog'
 import EquipmentStatus from './pages/EquipmentStatus'
+import CheckoutReceipt from './pages/CheckoutReceipt'
+import UsageAnalytics from './pages/UsageAnalytics'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -81,6 +83,7 @@ function App() {
               <Route path="assets/add" element={<AddAsset />} />
               <Route path="assets/:id" element={<AssetDetail />} />
               <Route path="checkout" element={<Checkout />} />
+              <Route path="checkout/receipt" element={<CheckoutReceipt />} />
               <Route path="checkin" element={<Checkin />} />
               <Route path="scanner" element={<Scanner />} />
               <Route path="crew-checkout" element={<CrewCheckout />} />
@@ -91,6 +94,7 @@ function App() {
               <Route path="audit-log" element={<AuditLog />} />
               <Route path="maintenance" element={<Maintenance />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="analytics" element={<UsageAnalytics />} />
               <Route path="users" element={<Users />} />
               <Route path="settings" element={<Settings />} />
             </Route>

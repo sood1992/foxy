@@ -22,7 +22,8 @@ import {
   Boxes,
   Calendar,
   Activity,
-  History
+  History,
+  BarChart3
 } from 'lucide-react'
 
 // Navigation items with role-based access
@@ -40,6 +41,7 @@ const navigation = [
   { name: 'Requests', href: '/requests', icon: ClipboardList, roles: 'all' },
   { name: 'Maintenance', href: '/maintenance', icon: Wrench, roles: 'manager' },
   { name: 'Reports', href: '/reports', icon: FileText, roles: 'manager' },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: 'manager' },
   { name: 'Audit Log', href: '/audit-log', icon: History, roles: 'manager' },
   { name: 'Users', href: '/users', icon: Users, roles: 'admin' },
   { name: 'Settings', href: '/settings', icon: Settings, roles: 'all' },

@@ -38,6 +38,8 @@ export default function AddAsset() {
     description: '',
     serial_number: '',
     condition_status: 'excellent',
+    storage_location: '',
+    shelf: '',
     notes: ''
   })
   const [photos, setPhotos] = useState([])
@@ -208,6 +210,30 @@ export default function AddAsset() {
                   <option value="good">Good</option>
                   <option value="needs_repair">Needs Repair</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Storage Location</label>
+                <input
+                  type="text"
+                  name="storage_location"
+                  value={form.storage_location}
+                  onChange={handleChange}
+                  className="input-field"
+                  placeholder="e.g., Room A, Warehouse 1"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Shelf / Area</label>
+                <input
+                  type="text"
+                  name="shelf"
+                  value={form.shelf}
+                  onChange={handleChange}
+                  className="input-field"
+                  placeholder="e.g., Shelf 3, Cabinet B"
+                />
               </div>
 
               <div className="md:col-span-2">
