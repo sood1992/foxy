@@ -1,0 +1,15 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/sunburni/public_html/foxy
+    - /bin/cp -R dist/* $DEPLOYPATH/
+    - /bin/cp -R api $DEPLOYPATH/
+    - /bin/cp .htaccess $DEPLOYPATH/
+    - /bin/mkdir -p $DEPLOYPATH/api/data
+    - /bin/mkdir -p $DEPLOYPATH/api/uploads/assets
+    - /bin/mkdir -p $DEPLOYPATH/api/uploads/transactions
+    - /bin/mkdir -p $DEPLOYPATH/api/logs
+    - /bin/chmod -R 755 $DEPLOYPATH/api
+    - /bin/chmod -R 777 $DEPLOYPATH/api/data
+    - /bin/chmod -R 777 $DEPLOYPATH/api/uploads
+    - /bin/chmod -R 777 $DEPLOYPATH/api/logs
