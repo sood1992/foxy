@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react'
-import { assetApi, transactionApi, statsApi } from '../api/client'
+import { assetApi, transactionApi } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import {
   BarChart3,
   TrendingUp,
   Users,
   Package,
-  Clock,
   Calendar,
-  ArrowUp,
   ArrowDown,
   Loader2,
   Filter
 } from 'lucide-react'
-import { format, parseISO, subDays, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
+import { format, parseISO, subDays } from 'date-fns'
 
 export default function UsageAnalytics() {
   const [loading, setLoading] = useState(true)

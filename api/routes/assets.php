@@ -147,6 +147,8 @@ function createAsset() {
         'checkout_date' => null,
         'expected_return_date' => null,
         'condition_status' => $input['condition_status'] ?? 'excellent',
+        'storage_location' => $input['storage_location'] ?? '',
+        'shelf' => $input['shelf'] ?? '',
         'notes' => $input['notes'] ?? '',
         'maintenance_interval_days' => 90,
         'total_checkouts' => 0
@@ -166,7 +168,7 @@ function updateAsset($id) {
     }
 
     // Allowed fields to update
-    $allowedFields = ['asset_name', 'category', 'description', 'serial_number', 'condition_status', 'notes', 'status'];
+    $allowedFields = ['asset_name', 'category', 'description', 'serial_number', 'condition_status', 'storage_location', 'shelf', 'notes', 'status'];
     $updates = array_intersect_key($input, array_flip($allowedFields));
 
     $updated = JsonDatabase::update('assets', 'asset_id', $id, $updates);
@@ -205,6 +207,7 @@ function checkoutAsset($id) {
 
     $borrower = $input['borrower_name'] ?? '';
     $returnDate = $input['expected_return_date'] ?? '';
+    $project = $input['project'] ?? '';
     $purpose = $input['purpose'] ?? '';
     $notes = $input['notes'] ?? '';
     $photos = $input['photos'] ?? [];
@@ -219,15 +222,19 @@ function checkoutAsset($id) {
         'current_borrower' => $borrower,
         'checkout_date' => date('Y-m-d H:i:s'),
         'expected_return_date' => $returnDate ?: null,
+        'current_project' => $project,
         'total_checkouts' => ($asset['total_checkouts'] ?? 0) + 1
     ]);
 
     // Log transaction
+    $transactionId = 'TXN-' . strtoupper(substr(uniqid(), -8));
     JsonDatabase::insert('transactions', [
+        'transaction_id' => $transactionId,
         'asset_id' => $id,
         'asset_name' => $asset['asset_name'],
         'borrower_name' => $borrower,
         'transaction_type' => 'checkout',
+        'project' => $project,
         'purpose' => $purpose,
         'notes' => $notes,
         'transaction_date' => date('Y-m-d H:i:s')
@@ -237,7 +244,10 @@ function checkoutAsset($id) {
     $updatedAsset = JsonDatabase::find('assets', 'asset_id', $id);
     EmailService::sendCheckoutNotification($updatedAsset, $borrower, $returnDate, $purpose, $photos);
 
-    Response::success(null, 'Asset checked out successfully');
+    // Log to audit
+    AuditLog::log('checkout', 'asset', $id, "Checked out to {$borrower}" . ($project ? " for project: {$project}" : ''));
+
+    Response::success(['transaction_id' => $transactionId], 'Asset checked out successfully');
 }
 
 function checkinAsset($id) {
@@ -266,6 +276,7 @@ function checkinAsset($id) {
         'current_borrower' => null,
         'checkout_date' => null,
         'expected_return_date' => null,
+        'current_project' => null,
         'last_returned_date' => date('Y-m-d H:i:s'),
         'condition_status' => $condition
     ]);
@@ -283,6 +294,9 @@ function checkinAsset($id) {
 
     // Send email notification
     EmailService::sendCheckinNotification($asset, $borrower, $condition, $notes, $photos);
+
+    // Log to audit
+    AuditLog::log('checkin', 'asset', $id, "Returned by {$borrower}, condition: {$condition}");
 
     Response::success(null, 'Asset checked in successfully');
 }
