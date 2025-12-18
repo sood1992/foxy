@@ -1,112 +1,97 @@
 <?php
 /**
- * Cron Job: Send Overdue Reminders
- *
- * Run this script daily via cron:
- * 0 9 * * * /usr/bin/php /home/sunburni/public_html/foxy/api/cron/overdue-reminders.php
- *
- * This will run every day at 9:00 AM
+ * Cron Job: Send overdue equipment reminders
+ * Schedule: Daily at 9:00 AM
+ * Command: /usr/local/bin/php /path/to/api/cron/overdue-reminders.php
  */
 
-// Set up paths
-define('BASE_PATH', dirname(dirname(__FILE__)));
+require_once dirname(__DIR__) . '/config.php';
+require_once dirname(__DIR__) . '/utils/JsonDatabase.php';
+require_once dirname(__DIR__) . '/utils/EmailService.php';
 
-require_once BASE_PATH . '/config.php';
-require_once BASE_PATH . '/utils/JsonDatabase.php';
-require_once BASE_PATH . '/utils/EmailService.php';
+echo "=== FOXY Overdue Reminders ===\n";
+echo "Running at: " . date('Y-m-d H:i:s') . "\n\n";
 
-// Log function
-function logMessage($message) {
-    $logFile = BASE_PATH . '/logs/cron.log';
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND | LOCK_EX);
-    echo "[$timestamp] $message\n";
+$assets = JsonDatabase::getAll('assets');
+$overdueAssets = [];
+
+foreach ($assets as $asset) {
+    if ($asset['status'] === 'checked_out' &&
+        !empty($asset['expected_return_date']) &&
+        strtotime($asset['expected_return_date']) < strtotime('today')) {
+        $overdueAssets[] = $asset;
+    }
 }
 
-// Ensure logs directory exists
-$logsDir = BASE_PATH . '/logs';
-if (!is_dir($logsDir)) {
-    mkdir($logsDir, 0755, true);
+if (empty($overdueAssets)) {
+    echo "No overdue equipment found.\n";
+    exit(0);
 }
 
-logMessage("Starting overdue reminders check...");
+echo "Found " . count($overdueAssets) . " overdue items.\n\n";
 
-try {
-    // Get all assets
-    $assets = JsonDatabase::getAll('assets');
-    $now = time();
-    $today = date('Y-m-d');
+// Group by borrower
+$byBorrower = [];
+foreach ($overdueAssets as $asset) {
+    $borrower = $asset['current_borrower'];
+    if (!isset($byBorrower[$borrower])) {
+        $byBorrower[$borrower] = [];
+    }
+    $byBorrower[$borrower][] = $asset;
+}
 
-    // Find overdue assets
-    $overdueAssets = [];
+// Get users for email addresses
+$users = JsonDatabase::getAll('users');
+$userEmails = [];
+foreach ($users as $user) {
+    $userEmails[strtolower($user['username'])] = $user['email'];
+}
+
+// Send reminders to borrowers
+foreach ($byBorrower as $borrower => $assets) {
+    $email = $userEmails[strtolower($borrower)] ?? null;
+
+    if ($email) {
+        $itemList = '';
+        foreach ($assets as $asset) {
+            $daysOverdue = floor((time() - strtotime($asset['expected_return_date'])) / 86400);
+            $itemList .= "- {$asset['asset_name']} ({$asset['asset_id']}) - {$daysOverdue} days overdue\n";
+        }
+
+        $subject = 'FOXY: Equipment Overdue Reminder';
+        $message = "Hi {$borrower},\n\n";
+        $message .= "The following equipment is overdue for return:\n\n";
+        $message .= $itemList;
+        $message .= "\nPlease return these items as soon as possible.\n\n";
+        $message .= "Thank you,\nNeoFox Equipment Team";
+
+        if (mail($email, $subject, $message)) {
+            echo "Sent reminder to {$borrower} ({$email}) for " . count($assets) . " items.\n";
+        } else {
+            echo "Failed to send to {$borrower} ({$email})\n";
+        }
+    } else {
+        echo "No email found for borrower: {$borrower}\n";
+    }
+}
+
+// Send summary to admin
+$adminSummary = "=== Daily Overdue Equipment Report ===\n";
+$adminSummary .= "Date: " . date('Y-m-d') . "\n";
+$adminSummary .= "Total overdue items: " . count($overdueAssets) . "\n\n";
+
+foreach ($byBorrower as $borrower => $assets) {
+    $adminSummary .= "** {$borrower} (" . count($assets) . " items) **\n";
     foreach ($assets as $asset) {
-        if ($asset['status'] !== 'checked_out') continue;
-        if (empty($asset['expected_return_date'])) continue;
-
-        $dueDate = strtotime($asset['expected_return_date']);
-        if ($dueDate < $now) {
-            $daysOverdue = floor(($now - $dueDate) / (60 * 60 * 24));
-            $asset['days_overdue'] = $daysOverdue;
-            $overdueAssets[] = $asset;
-        }
+        $daysOverdue = floor((time() - strtotime($asset['expected_return_date'])) / 86400);
+        $adminSummary .= "  - {$asset['asset_name']} ({$asset['asset_id']}): {$daysOverdue} days overdue\n";
     }
-
-    if (empty($overdueAssets)) {
-        logMessage("No overdue assets found.");
-        exit(0);
-    }
-
-    logMessage("Found " . count($overdueAssets) . " overdue asset(s).");
-
-    // Group by borrower
-    $byBorrower = [];
-    foreach ($overdueAssets as $asset) {
-        $borrower = $asset['current_borrower'] ?? 'Unknown';
-        if (!isset($byBorrower[$borrower])) {
-            $byBorrower[$borrower] = [];
-        }
-        $byBorrower[$borrower][] = $asset;
-    }
-
-    // Get users for email addresses
-    $users = JsonDatabase::getAll('users');
-    $userEmails = [];
-    foreach ($users as $user) {
-        $userEmails[strtolower($user['username'])] = $user['email'] ?? null;
-    }
-
-    // Send reminders to borrowers
-    foreach ($byBorrower as $borrower => $assets) {
-        $borrowerEmail = $userEmails[strtolower($borrower)] ?? null;
-
-        if ($borrowerEmail) {
-            $success = EmailService::sendOverdueReminder($borrowerEmail, $borrower, $assets);
-            if ($success) {
-                logMessage("Sent reminder to $borrower ($borrowerEmail) for " . count($assets) . " item(s).");
-            } else {
-                logMessage("Failed to send reminder to $borrower ($borrowerEmail).");
-            }
-        } else {
-            logMessage("No email found for borrower: $borrower");
-        }
-    }
-
-    // Send summary to admin
-    $adminEmail = ADMIN_EMAIL;
-    if (!empty($adminEmail)) {
-        $success = EmailService::sendOverdueSummaryToAdmin($adminEmail, $overdueAssets);
-        if ($success) {
-            logMessage("Sent overdue summary to admin ($adminEmail).");
-        } else {
-            logMessage("Failed to send summary to admin.");
-        }
-    }
-
-    logMessage("Overdue reminders check completed.");
-
-} catch (Exception $e) {
-    logMessage("Error: " . $e->getMessage());
-    exit(1);
+    $adminSummary .= "\n";
 }
 
-exit(0);
+if (defined('ADMIN_EMAIL') && ADMIN_EMAIL) {
+    mail(ADMIN_EMAIL, 'FOXY: Daily Overdue Report - ' . count($overdueAssets) . ' items', $adminSummary);
+    echo "\nAdmin summary sent to " . ADMIN_EMAIL . "\n";
+}
+
+echo "\n=== Complete ===\n";
