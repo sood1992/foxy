@@ -1,23 +1,21 @@
 # FOXY Inventory System
-# Apache Configuration
+# Apache Configuration for SUBDIRECTORY deployment
+# Change /foxynew/ to your subdirectory name (or / for root)
 
 # Enable rewrite engine
 RewriteEngine On
-RewriteBase /
+RewriteBase /foxynew/
 
-# Handle API requests
-RewriteCond %{REQUEST_URI} ^/api/
+# Skip rewrite for actual files and directories
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Handle API requests - route to api/index.php
 RewriteRule ^api/(.*)$ api/index.php [L,QSA]
 
-# Handle uploads - serve files directly
-RewriteCond %{REQUEST_URI} ^/api/uploads/
-RewriteRule ^api/uploads/(.*)$ api/uploads/$1 [L]
-
-# Handle React Router - redirect all non-file requests to index.html
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_URI} !^/api/
-RewriteRule . /index.html [L]
+# Handle React Router - everything else goes to index.html
+RewriteRule ^(.*)$ index.html [L]
 
 # Security headers
 <IfModule mod_headers.c>
