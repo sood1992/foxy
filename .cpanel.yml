@@ -3,4 +3,10 @@ deployment:
   tasks:
     - export DEPLOYPATH=/home/sunburni/public_html/foxy/
     - /bin/mkdir -p $DEPLOYPATH
-    - /bin/cp -R app/* $DEPLOYPATH
+    - /bin/mkdir -p $DEPLOYPATH/uploads/asset_photos
+    # Copy PHP files but preserve existing uploads
+    - /bin/cp -R app/*.php $DEPLOYPATH/
+    - /bin/cp -R app/classes $DEPLOYPATH/
+    - /bin/cp -R app/config $DEPLOYPATH/
+    - /bin/cp -R app/cron $DEPLOYPATH/
+    - /bin/cp -R app/logs $DEPLOYPATH/
