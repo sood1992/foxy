@@ -1,10 +1,10 @@
 # FOXY Inventory System
-# Apache Configuration for SUBDIRECTORY deployment
-# Change /foxynew/ to your subdirectory name (or / for root)
+# Apache Configuration for ROOT/SUBDOMAIN deployment
+# For: foxy.neofoxmedia.com
 
 # Enable rewrite engine
 RewriteEngine On
-RewriteBase /foxynew/
+RewriteBase /
 
 # Skip rewrite for actual files and directories
 RewriteCond %{REQUEST_FILENAME} -f [OR]

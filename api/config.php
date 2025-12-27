@@ -22,7 +22,7 @@ define('EQUIPMENT_MANAGER_EMAIL', 'admin@neofoxmedia.com'); // Can be same or di
 
 // Site Configuration
 define('SITE_NAME', 'NeoFox Media');
-define('SITE_URL', 'https://yourdomain.com'); // Update this
+define('SITE_URL', 'https://foxy.neofoxmedia.com');
 
 // JWT Configuration
 define('JWT_SECRET', 'your-secret-key-change-this-in-production-' . md5(__FILE__));
