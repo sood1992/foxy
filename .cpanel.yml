@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/sunburni/public_html/foxy/
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/cp -R app/* $DEPLOYPATH
