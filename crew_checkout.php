@@ -1709,31 +1709,6 @@ function sendCrewCheckoutEmail($crew_member, $email, $equipment, $project_name, 
             window.location.href = 'crew_checkout.php';
         }
 
-        // Form validation
-        document.getElementById('crew-checkout-form').addEventListener('submit', function(e) {
-            const crewCards = document.querySelectorAll('.crew-card');
-            let hasValidCrew = false;
-            
-            crewCards.forEach(card => {
-                const memberSelect = card.querySelector('select[name*="[member]"]');
-                const equipmentInputs = card.querySelectorAll('input[name*="[equipment][]"]');
-                
-                if (memberSelect && memberSelect.value && equipmentInputs.length > 0) {
-                    hasValidCrew = true;
-                }
-            });
-            
-            if (!hasValidCrew) {
-                e.preventDefault();
-                alert('Please assign at least one crew member with equipment before submitting.');
-                return false;
-            }
-            
-            // Show loading state
-            const submitBtn = this.querySelector('button[type="submit"]');
-            submitBtn.innerHTML = '<div class="spinner"></div> Processing...';
-            submitBtn.disabled = true;
-        });
     </script>
 </body>
 </html>

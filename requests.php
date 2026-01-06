@@ -806,19 +806,19 @@ error_log("=== REQUESTS.PHP PROCESSING COMPLETE ===");
         <!-- Alerts -->
         <?php if (isset($success)): ?>
         <div class="alert alert-success">
-            <i class="fas fa-check-circle"></i> <?php echo $success; ?>
+            <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($success); ?>
         </div>
         <?php endif; ?>
-        
+
         <?php if (isset($warning)): ?>
         <div class="alert alert-warning">
-            <i class="fas fa-exclamation-triangle"></i> <?php echo $warning; ?>
+            <i class="fas fa-exclamation-triangle"></i> <?php echo htmlspecialchars($warning); ?>
         </div>
         <?php endif; ?>
-        
+
         <?php if (isset($error)): ?>
         <div class="alert alert-danger">
-            <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
+            <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($error); ?>
         </div>
         <?php endif; ?>
 

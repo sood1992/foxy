@@ -48,22 +48,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } else {
         // Handle multiple selected assets
         $selected_assets = isset($_POST['required_items']) ? $_POST['required_items'] : [];
-        $assets_text = implode(', ', $selected_assets);
-        
-        $data = [
-            'requester_name' => $selected_user['username'],
-            'requester_email' => $selected_user['email'],
-            'required_items' => $assets_text,
-            'request_dates' => $_POST['request_dates'],
-            'purpose' => $_POST['purpose']
-        ];
-        
-        if ($gear_request->create($data)) {
-            $success = "Gear request submitted successfully for " . htmlspecialchars($selected_user['username']) . "! We'll get back to you soon.";
-            // Send notification to admin
-            // EmailNotification::sendEmail('rishabh@neofoxmedia.com', 'New Gear Request - ' . $data['requester_name'], "A new gear request has been submitted");
+        $start_date = $_POST['start_date'] ?? '';
+        $end_date = $_POST['end_date'] ?? '';
+
+        // Validate required fields
+        if (empty($selected_assets)) {
+            $error = "Please select at least one equipment item.";
+        } elseif (empty($start_date) || empty($end_date)) {
+            $error = "Please select both start and end dates.";
+        } elseif (strtotime($start_date) < strtotime(date('Y-m-d'))) {
+            $error = "Start date cannot be in the past.";
+        } elseif (strtotime($end_date) < strtotime($start_date)) {
+            $error = "End date must be on or after the start date.";
         } else {
-            $error = "Failed to submit gear request. Please try again.";
+            $assets_text = implode(', ', $selected_assets);
+            $request_dates = date('m/d/Y', strtotime($start_date)) . ' to ' . date('m/d/Y', strtotime($end_date));
+
+            $data = [
+                'requester_name' => $selected_user['username'],
+                'requester_email' => $selected_user['email'],
+                'required_items' => $assets_text,
+                'request_dates' => $request_dates,
+                'purpose' => trim($_POST['purpose'] ?? '')
+            ];
+
+            if ($gear_request->create($data)) {
+                $success = "Gear request submitted successfully for " . $selected_user['username'] . "! We'll get back to you soon.";
+                // Send notification to admin
+                // EmailNotification::sendEmail('rishabh@neofoxmedia.com', 'New Gear Request - ' . $data['requester_name'], "A new gear request has been submitted");
+            } else {
+                $error = "Failed to submit gear request. Please try again.";
+            }
         }
     }
 }
@@ -681,13 +696,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <div class="card-body">
                 <?php if (isset($success)): ?>
                 <div class="alert alert-success">
-                    <i class="fas fa-check-circle"></i> <?php echo $success; ?>
+                    <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($success); ?>
                 </div>
                 <?php endif; ?>
-                
+
                 <?php if (isset($error)): ?>
                 <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
+                    <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($error); ?>
                 </div>
                 <?php endif; ?>
 
@@ -787,11 +802,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="start_date" class="form-label">Start Date *</label>
-                                <input type="date" class="form-control" id="start_date" name="start_date" required>
+                                <input type="date" class="form-control" id="start_date" name="start_date" required min="<?php echo date('Y-m-d'); ?>">
                             </div>
                             <div class="form-group">
                                 <label for="end_date" class="form-label">End Date *</label>
-                                <input type="date" class="form-control" id="end_date" name="end_date" required>
+                                <input type="date" class="form-control" id="end_date" name="end_date" required min="<?php echo date('Y-m-d'); ?>">
                             </div>
                         </div>
                         <input type="hidden" id="request_dates" name="request_dates">
@@ -928,17 +943,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Combine start and end dates into request_dates field
         document.getElementById('start_date').addEventListener('change', updateRequestDates);
         document.getElementById('end_date').addEventListener('change', updateRequestDates);
-        
+
         function updateRequestDates() {
             const startDate = document.getElementById('start_date').value;
             const endDate = document.getElementById('end_date').value;
-            
+
             if (startDate && endDate) {
                 const startFormatted = new Date(startDate).toLocaleDateString();
                 const endFormatted = new Date(endDate).toLocaleDateString();
                 document.getElementById('request_dates').value = startFormatted + ' to ' + endFormatted;
             }
         }
+
+        // Update end date min when start date changes
+        document.getElementById('start_date').addEventListener('change', function() {
+            const endDateInput = document.getElementById('end_date');
+            endDateInput.min = this.value;
+            // If end date is before start date, reset it
+            if (endDateInput.value && new Date(endDateInput.value) < new Date(this.value)) {
+                endDateInput.value = this.value;
+            }
+            updateRequestDates();
+        });
+
+        // Form validation
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const requesterName = document.getElementById('requester_name').value;
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            const checkboxes = document.querySelectorAll('.equipment-checkbox:checked');
+
+            if (!requesterName) {
+                e.preventDefault();
+                alert('Please select a team member.');
+                return false;
+            }
+
+            if (checkboxes.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one equipment item.');
+                return false;
+            }
+
+            if (!startDate || !endDate) {
+                e.preventDefault();
+                alert('Please select both start and end dates.');
+                return false;
+            }
+
+            if (new Date(endDate) < new Date(startDate)) {
+                e.preventDefault();
+                alert('End date must be on or after the start date.');
+                return false;
+            }
+
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            submitBtn.disabled = true;
+        });
     </script>
 </body>
 </html>
