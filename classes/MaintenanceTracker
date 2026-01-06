@@ -1,0 +1,574 @@
+<?php
+// classes/MaintenanceTracker.php
+class MaintenanceTracker {
+    private $conn;
+    
+    public function __construct($db) {
+        $this->conn = $db;
+    }
+    
+    /**
+     * Schedule maintenance for an asset
+     */
+    public function scheduleMaintenance($data) {
+        try {
+            $this->conn->beginTransaction();
+            
+            $query = "INSERT INTO maintenance_schedule 
+                      (asset_id, maintenance_type, scheduled_date, next_maintenance_date, 
+                       assigned_to, priority, notes, estimated_duration, cost_estimate, status) 
+                      VALUES (:asset_id, :maintenance_type, :scheduled_date, :next_maintenance_date,
+                              :assigned_to, :priority, :notes, :estimated_duration, :cost_estimate, 'scheduled')";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':asset_id', $data['asset_id']);
+            $stmt->bindParam(':maintenance_type', $data['maintenance_type']);
+            $stmt->bindParam(':scheduled_date', $data['scheduled_date']);
+            $stmt->bindParam(':next_maintenance_date', $data['next_maintenance_date']);
+            $stmt->bindParam(':assigned_to', $data['assigned_to']);
+            $stmt->bindParam(':priority', $data['priority']);
+            $stmt->bindParam(':notes', $data['notes']);
+            $stmt->bindParam(':estimated_duration', $data['estimated_duration']);
+            $stmt->bindParam(':cost_estimate', $data['cost_estimate']);
+            
+            if ($stmt->execute()) {
+                $maintenance_id = $this->conn->lastInsertId();
+                
+                // Update asset status to maintenance if scheduled for today or past
+                if (strtotime($data['scheduled_date']) <= time()) {
+                    $this->updateAssetMaintenanceStatus($data['asset_id'], 'maintenance');
+                }
+                
+                $this->conn->commit();
+                return $maintenance_id;
+            } else {
+                $this->conn->rollBack();
+                return false;
+            }
+        } catch (PDOException $e) {
+            $this->conn->rollBack();
+            throw new Exception("Failed to schedule maintenance: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Complete maintenance task
+     */
+    public function completeMaintenance($maintenance_id, $completion_data) {
+        try {
+            $this->conn->beginTransaction();
+            
+            // Get maintenance details
+            $maintenance = $this->getMaintenanceById($maintenance_id);
+            if (!$maintenance) {
+                throw new Exception("Maintenance record not found");
+            }
+            
+            // Update maintenance record
+            $query = "UPDATE maintenance_schedule 
+                      SET status = 'completed',
+                          completed_date = NOW(),
+                          actual_duration = :actual_duration,
+                          actual_cost = :actual_cost,
+                          completion_notes = :completion_notes,
+                          completed_by = :completed_by
+                      WHERE id = :id";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':id', $maintenance_id);
+            $stmt->bindParam(':actual_duration', $completion_data['actual_duration']);
+            $stmt->bindParam(':actual_cost', $completion_data['actual_cost']);
+            $stmt->bindParam(':completion_notes', $completion_data['completion_notes']);
+            $stmt->bindParam(':completed_by', $completion_data['completed_by']);
+            
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to update maintenance record");
+            }
+            
+            // Log maintenance history
+            $this->logMaintenanceHistory($maintenance_id, 'completed', $completion_data);
+            
+            // Update asset status back to available (if it was in maintenance)
+            $asset = $this->getAssetById($maintenance['asset_id']);
+            if ($asset && $asset['status'] == 'maintenance') {
+                $new_condition = $completion_data['resulting_condition'] ?? 'good';
+                $this->updateAssetAfterMaintenance($maintenance['asset_id'], $new_condition);
+            }
+            
+            // Schedule next maintenance if it's recurring
+            if ($maintenance['maintenance_type'] == 'routine' || $maintenance['maintenance_type'] == 'preventive') {
+                $this->scheduleNextRoutineMaintenance($maintenance['asset_id'], $maintenance['maintenance_type']);
+            }
+            
+            $this->conn->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->conn->rollBack();
+            throw $e;
+        }
+    }
+    
+    /**
+     * Report equipment issue
+     */
+    public function reportIssue($data) {
+        try {
+            $this->conn->beginTransaction();
+            
+            $query = "INSERT INTO maintenance_issues 
+                      (asset_id, reported_by, issue_type, description, severity, 
+                       reported_date, status, images) 
+                      VALUES (:asset_id, :reported_by, :issue_type, :description, :severity,
+                              NOW(), 'open', :images)";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':asset_id', $data['asset_id']);
+            $stmt->bindParam(':reported_by', $data['reported_by']);
+            $stmt->bindParam(':issue_type', $data['issue_type']);
+            $stmt->bindParam(':description', $data['description']);
+            $stmt->bindParam(':severity', $data['severity']);
+            $stmt->bindParam(':images', $data['images'] ?? null);
+            
+            if ($stmt->execute()) {
+                $issue_id = $this->conn->lastInsertId();
+                
+                // If severity is high or critical, update asset status
+                if (in_array($data['severity'], ['high', 'critical'])) {
+                    $this->updateAssetMaintenanceStatus($data['asset_id'], 'maintenance');
+                    
+                    // Auto-schedule urgent maintenance
+                    $maintenance_data = [
+                        'asset_id' => $data['asset_id'],
+                        'maintenance_type' => 'repair',
+                        'scheduled_date' => date('Y-m-d H:i:s'),
+                        'next_maintenance_date' => date('Y-m-d H:i:s', strtotime('+1 day')),
+                        'assigned_to' => null,
+                        'priority' => $data['severity'],
+                        'notes' => 'Auto-scheduled due to reported issue: ' . $data['description'],
+                        'estimated_duration' => null,
+                        'cost_estimate' => null
+                    ];
+                    
+                    $this->scheduleMaintenance($maintenance_data);
+                }
+                
+                $this->conn->commit();
+                return $issue_id;
+            } else {
+                $this->conn->rollBack();
+                return false;
+            }
+        } catch (PDOException $e) {
+            $this->conn->rollBack();
+            throw new Exception("Failed to report issue: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Get maintenance schedule for an asset
+     */
+    public function getAssetMaintenanceSchedule($asset_id) {
+        $query = "SELECT ms.*, a.asset_name, a.category
+                  FROM maintenance_schedule ms
+                  JOIN assets a ON ms.asset_id = a.id
+                  WHERE ms.asset_id = :asset_id
+                  ORDER BY ms.scheduled_date DESC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':asset_id', $asset_id);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get upcoming maintenance tasks
+     */
+    public function getUpcomingMaintenance($days_ahead = 30) {
+        $query = "SELECT ms.*, a.asset_name, a.asset_id as asset_code, a.category
+                  FROM maintenance_schedule ms
+                  JOIN assets a ON ms.asset_id = a.id
+                  WHERE ms.status IN ('scheduled', 'in_progress')
+                  AND ms.scheduled_date <= DATE_ADD(NOW(), INTERVAL :days DAY)
+                  ORDER BY ms.scheduled_date ASC, ms.priority DESC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':days', $days_ahead, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get overdue maintenance
+     */
+    public function getOverdueMaintenance() {
+        $query = "SELECT ms.*, a.asset_name, a.asset_id as asset_code, a.category
+                  FROM maintenance_schedule ms
+                  JOIN assets a ON ms.asset_id = a.id
+                  WHERE ms.status = 'scheduled'
+                  AND ms.scheduled_date < NOW()
+                  ORDER BY ms.scheduled_date ASC, ms.priority DESC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get maintenance history for an asset
+     */
+    public function getMaintenanceHistory($asset_id, $limit = 50) {
+        $query = "SELECT ms.*, mh.action, mh.details as history_details, mh.created_at as history_date
+                  FROM maintenance_schedule ms
+                  LEFT JOIN maintenance_history mh ON ms.id = mh.maintenance_id
+                  WHERE ms.asset_id = :asset_id
+                  ORDER BY ms.completed_date DESC, mh.created_at DESC
+                  LIMIT :limit";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':asset_id', $asset_id);
+        $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get open issues
+     */
+    public function getOpenIssues() {
+        $query = "SELECT mi.*, a.asset_name, a.asset_id as asset_code, a.category
+                  FROM maintenance_issues mi
+                  JOIN assets a ON mi.asset_id = a.id
+                  WHERE mi.status = 'open'
+                  ORDER BY 
+                    CASE mi.severity 
+                      WHEN 'critical' THEN 1
+                      WHEN 'high' THEN 2
+                      WHEN 'medium' THEN 3
+                      WHEN 'low' THEN 4
+                    END,
+                    mi.reported_date ASC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get maintenance statistics
+     */
+    public function getMaintenanceStats($period_days = 30) {
+        $stats = [];
+        
+        // Completed maintenance count
+        $query = "SELECT COUNT(*) as count FROM maintenance_schedule 
+                  WHERE status = 'completed' 
+                  AND completed_date >= DATE_SUB(NOW(), INTERVAL :days DAY)";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':days', $period_days, PDO::PARAM_INT);
+        $stmt->execute();
+        $stats['completed_maintenance'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+        
+        // Pending maintenance count
+        $query = "SELECT COUNT(*) as count FROM maintenance_schedule 
+                  WHERE status = 'scheduled'";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $stats['pending_maintenance'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+        
+        // Overdue maintenance count
+        $query = "SELECT COUNT(*) as count FROM maintenance_schedule 
+                  WHERE status = 'scheduled' AND scheduled_date < NOW()";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $stats['overdue_maintenance'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+        
+        // Open issues count
+        $query = "SELECT COUNT(*) as count FROM maintenance_issues WHERE status = 'open'";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $stats['open_issues'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+        
+        // Average maintenance cost
+        $query = "SELECT AVG(actual_cost) as avg_cost FROM maintenance_schedule 
+                  WHERE status = 'completed' AND actual_cost IS NOT NULL
+                  AND completed_date >= DATE_SUB(NOW(), INTERVAL :days DAY)";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':days', $period_days, PDO::PARAM_INT);
+        $stmt->execute();
+        $stats['avg_maintenance_cost'] = $stmt->fetch(PDO::FETCH_ASSOC)['avg_cost'] ?: 0;
+        
+        // Maintenance by type
+        $query = "SELECT maintenance_type, COUNT(*) as count
+                  FROM maintenance_schedule 
+                  WHERE completed_date >= DATE_SUB(NOW(), INTERVAL :days DAY)
+                  GROUP BY maintenance_type";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':days', $period_days, PDO::PARAM_INT);
+        $stmt->execute();
+        $stats['maintenance_by_type'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $stats;
+    }
+    
+    /**
+     * Get assets due for routine maintenance
+     */
+    public function getAssetsDueForRoutine() {
+        $query = "SELECT a.*, 
+                         COALESCE(MAX(ms.completed_date), a.created_at) as last_maintenance,
+                         DATEDIFF(NOW(), COALESCE(MAX(ms.completed_date), a.created_at)) as days_since_maintenance
+                  FROM assets a
+                  LEFT JOIN maintenance_schedule ms ON a.id = ms.asset_id AND ms.status = 'completed'
+                  GROUP BY a.id
+                  HAVING days_since_maintenance >= 90
+                  ORDER BY days_since_maintenance DESC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Update maintenance task status
+     */
+    public function updateMaintenanceStatus($maintenance_id, $status, $notes = '') {
+        try {
+            $query = "UPDATE maintenance_schedule 
+                      SET status = :status, 
+                          notes = CONCAT(COALESCE(notes, ''), '\n', :notes)
+                      WHERE id = :id";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':id', $maintenance_id);
+            $stmt->bindParam(':status', $status);
+            $stmt->bindParam(':notes', $notes);
+            
+            if ($stmt->execute()) {
+                $this->logMaintenanceHistory($maintenance_id, 'status_changed', [
+                    'new_status' => $status,
+                    'notes' => $notes
+                ]);
+                return true;
+            }
+            return false;
+        } catch (PDOException $e) {
+            throw new Exception("Failed to update maintenance status: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Resolve an issue
+     */
+    public function resolveIssue($issue_id, $resolution_data) {
+        try {
+            $this->conn->beginTransaction();
+            
+            $query = "UPDATE maintenance_issues 
+                      SET status = 'resolved',
+                          resolved_date = NOW(),
+                          resolved_by = :resolved_by,
+                          resolution_notes = :resolution_notes,
+                          resolution_cost = :resolution_cost
+                      WHERE id = :id";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':id', $issue_id);
+            $stmt->bindParam(':resolved_by', $resolution_data['resolved_by']);
+            $stmt->bindParam(':resolution_notes', $resolution_data['resolution_notes']);
+            $stmt->bindParam(':resolution_cost', $resolution_data['resolution_cost']);
+            
+            if ($stmt->execute()) {
+                // If there was associated maintenance, mark it as completed
+                if (isset($resolution_data['maintenance_completed']) && $resolution_data['maintenance_completed']) {
+                    $issue = $this->getIssueById($issue_id);
+                    if ($issue) {
+                        // Find related maintenance tasks
+                        $maintenance_query = "SELECT id FROM maintenance_schedule 
+                                            WHERE asset_id = :asset_id 
+                                            AND status IN ('scheduled', 'in_progress')
+                                            AND maintenance_type = 'repair'";
+                        $maintenance_stmt = $this->conn->prepare($maintenance_query);
+                        $maintenance_stmt->bindParam(':asset_id', $issue['asset_id']);
+                        $maintenance_stmt->execute();
+                        $maintenance_tasks = $maintenance_stmt->fetchAll(PDO::FETCH_ASSOC);
+                        
+                        foreach ($maintenance_tasks as $task) {
+                            $this->completeMaintenance($task['id'], [
+                                'actual_duration' => $resolution_data['duration'] ?? null,
+                                'actual_cost' => $resolution_data['resolution_cost'] ?? null,
+                                'completion_notes' => 'Completed as part of issue resolution: ' . $resolution_data['resolution_notes'],
+                                'completed_by' => $resolution_data['resolved_by'],
+                                'resulting_condition' => $resolution_data['resulting_condition'] ?? 'good'
+                            ]);
+                        }
+                    }
+                }
+                
+                $this->conn->commit();
+                return true;
+            } else {
+                $this->conn->rollBack();
+                return false;
+            }
+        } catch (Exception $e) {
+            $this->conn->rollBack();
+            throw $e;
+        }
+    }
+    
+    // Private helper methods
+    
+    private function updateAssetMaintenanceStatus($asset_id, $status) {
+        $query = "UPDATE assets SET status = :status WHERE id = :asset_id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':asset_id', $asset_id);
+        $stmt->bindParam(':status', $status);
+        return $stmt->execute();
+    }
+    
+    private function updateAssetAfterMaintenance($asset_id, $condition) {
+        $query = "UPDATE assets 
+                  SET status = 'available', 
+                      condition_status = :condition 
+                  WHERE id = :asset_id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':asset_id', $asset_id);
+        $stmt->bindParam(':condition', $condition);
+        return $stmt->execute();
+    }
+    
+    private function logMaintenanceHistory($maintenance_id, $action, $details) {
+        $query = "INSERT INTO maintenance_history 
+                  (maintenance_id, action, details, created_at) 
+                  VALUES (:maintenance_id, :action, :details, NOW())";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':maintenance_id', $maintenance_id);
+        $stmt->bindParam(':action', $action);
+        $stmt->bindParam(':details', json_encode($details));
+        return $stmt->execute();
+    }
+    
+    private function scheduleNextRoutineMaintenance($asset_id, $maintenance_type) {
+        $intervals = [
+            'routine' => '+3 months',
+            'preventive' => '+6 months'
+        ];
+        
+        $interval = $intervals[$maintenance_type] ?? '+3 months';
+        $next_date = date('Y-m-d H:i:s', strtotime($interval));
+        
+        $this->scheduleMaintenance([
+            'asset_id' => $asset_id,
+            'maintenance_type' => $maintenance_type,
+            'scheduled_date' => $next_date,
+            'next_maintenance_date' => $next_date,
+            'assigned_to' => null,
+            'priority' => 'medium',
+            'notes' => 'Auto-scheduled routine maintenance',
+            'estimated_duration' => null,
+            'cost_estimate' => null
+        ]);
+    }
+    
+    private function getMaintenanceById($id) {
+        $query = "SELECT * FROM maintenance_schedule WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    
+    private function getAssetById($id) {
+        $query = "SELECT * FROM assets WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    
+    private function getIssueById($id) {
+        $query = "SELECT * FROM maintenance_issues WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+}
+
+/*
+==============================================
+SQL SCHEMA ADDITIONS FOR MAINTENANCE TRACKING
+==============================================
+
+-- Maintenance Schedule Table
+CREATE TABLE maintenance_schedule (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    asset_id INT NOT NULL,
+    maintenance_type ENUM('routine', 'preventive', 'repair', 'calibration', 'inspection') NOT NULL,
+    scheduled_date DATETIME NOT NULL,
+    next_maintenance_date DATETIME,
+    completed_date DATETIME,
+    assigned_to VARCHAR(100),
+    priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
+    status ENUM('scheduled', 'in_progress', 'completed', 'cancelled') DEFAULT 'scheduled',
+    notes TEXT,
+    completion_notes TEXT,
+    estimated_duration INT, -- in hours
+    actual_duration INT, -- in hours
+    cost_estimate DECIMAL(10,2),
+    actual_cost DECIMAL(10,2),
+    completed_by VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+
+-- Maintenance Issues Table
+CREATE TABLE maintenance_issues (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    asset_id INT NOT NULL,
+    reported_by VARCHAR(100) NOT NULL,
+    issue_type ENUM('mechanical', 'electrical', 'software', 'cosmetic', 'performance', 'safety') NOT NULL,
+    description TEXT NOT NULL,
+    severity ENUM('low', 'medium', 'high', 'critical') NOT NULL,
+    status ENUM('open', 'in_progress', 'resolved', 'closed') DEFAULT 'open',
+    reported_date DATETIME NOT NULL,
+    resolved_date DATETIME,
+    resolved_by VARCHAR(100),
+    resolution_notes TEXT,
+    resolution_cost DECIMAL(10,2),
+    images TEXT, -- JSON array of image URLs
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+
+-- Maintenance History Table
+CREATE TABLE maintenance_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    maintenance_id INT,
+    action VARCHAR(100) NOT NULL,
+    details TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (maintenance_id) REFERENCES maintenance_schedule(id) ON DELETE CASCADE
+);
+
+-- Notification Log Table (for the notification system)
+CREATE TABLE notification_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    type ENUM('checkout', 'checkin', 'overdue_reminder', 'maintenance_reminder') NOT NULL,
+    asset_id VARCHAR(50),
+    recipient_email VARCHAR(100),
+    borrower_name VARCHAR(100),
+    status ENUM('sent', 'failed', 'pending') NOT NULL,
+    details TEXT, -- JSON with additional info
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add maintenance-related columns to assets table
+ALTER TABLE assets ADD COLUMN last_maintenance_date DATETIME;
+ALTER TABLE assets ADD COLUMN next_maintenance_due DATETIME;
+ALTER TABLE assets ADD COLUMN maintenance_interval_days INT DEFAULT 90;
+
+*/
+?>
