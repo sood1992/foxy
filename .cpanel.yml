@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/neofoxme/public_html/foxy/
+    - /bin/cp -R * $DEPLOYPATH
