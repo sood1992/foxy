@@ -1,0 +1,23 @@
+# OS generated files
+__MACOSX/
+.DS_Store
+Thumbs.db
+
+# Log files
+error_log
+logs/
+*.log
+
+# Temp files
+tmp/
+*.tmp
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files (for local overrides)
+.env
+.env.local
