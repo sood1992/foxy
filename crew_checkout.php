@@ -81,8 +81,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['action'])) {
         $return_date = $_POST['return_date'] ?? '';
         $crew_assignments = $_POST['crew_assignments'] ?? [];
         
-        if (empty($project_name) || empty($return_date) || empty($crew_assignments)) {
-            throw new Exception('Please fill in all required fields');
+        if (empty($project_name)) {
+            throw new Exception('Please enter a project name');
+        }
+        if (empty($return_date)) {
+            throw new Exception('Please select a return date');
+        }
+        if (strtotime($return_date) <= time()) {
+            throw new Exception('Return date must be in the future');
+        }
+        if (empty($crew_assignments)) {
+            throw new Exception('Please add at least one crew member');
         }
         
         $results = [];
@@ -1458,6 +1467,55 @@ function sendCrewCheckoutEmail($crew_member, $email, $equipment, $project_name, 
                 addCrewMember();
             }
         }
+
+        // Form validation before submission
+        document.getElementById('crew-checkout-form')?.addEventListener('submit', function(e) {
+            // Check if project name is filled
+            const projectName = document.querySelector('input[name="project_name"]').value.trim();
+            if (!projectName) {
+                e.preventDefault();
+                alert('Please enter a project name.');
+                return false;
+            }
+
+            // Check return date
+            const returnDate = new Date(document.querySelector('input[name="return_date"]').value);
+            const now = new Date();
+            if (returnDate <= now) {
+                e.preventDefault();
+                alert('Return date must be in the future.');
+                return false;
+            }
+
+            // Check if at least one crew member has a member selected and equipment assigned
+            const crewCards = document.querySelectorAll('.crew-card');
+            if (crewCards.length === 0) {
+                e.preventDefault();
+                alert('Please add at least one crew member.');
+                return false;
+            }
+
+            let hasValidAssignment = false;
+            crewCards.forEach(card => {
+                const memberSelect = card.querySelector('select[name*="[member]"]');
+                const equipmentInputs = card.querySelectorAll('input[name*="[equipment][]"]');
+
+                if (memberSelect && memberSelect.value && equipmentInputs.length > 0) {
+                    hasValidAssignment = true;
+                }
+            });
+
+            if (!hasValidAssignment) {
+                e.preventDefault();
+                alert('Please select a team member and assign at least one piece of equipment to at least one crew member.');
+                return false;
+            }
+
+            // Show loading state
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            submitBtn.disabled = true;
+        });
 
         // Print functions
         function printAllReceipts() {

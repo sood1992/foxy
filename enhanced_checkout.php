@@ -35,10 +35,21 @@ $error = '';
 $checkout_results = [];
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $borrower = $_POST['borrower_name'];
-    $borrower_email = $_POST['borrower_email'];
-    $expected_return = $_POST['expected_return_date'];
-    $purpose = $_POST['purpose'];
+    $borrower = trim($_POST['borrower_name'] ?? '');
+    $borrower_email = trim($_POST['borrower_email'] ?? '');
+    $expected_return = $_POST['expected_return_date'] ?? '';
+    $purpose = trim($_POST['purpose'] ?? '');
+
+    // Validate required fields
+    if (empty($borrower)) {
+        $error = "Please enter your name.";
+    } elseif (empty($borrower_email) || !filter_var($borrower_email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Please enter a valid email address.";
+    } elseif (empty($expected_return)) {
+        $error = "Please select a return date.";
+    } elseif (strtotime($expected_return) <= time()) {
+        $error = "Expected return date must be in the future.";
+    }
 
     // Handle multiple asset IDs
     $asset_ids = isset($_POST['asset_ids']) ? $_POST['asset_ids'] : [];
@@ -50,9 +61,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $asset_ids = array_unique(array_filter($asset_ids));
 
-    if (empty($asset_ids)) {
+    // Only proceed if no validation errors
+    if (empty($error) && empty($asset_ids)) {
         $error = "Please select at least one equipment item to check out.";
-    } else {
+    }
+
+    if (empty($error)) {
         $success_count = 0;
         $fail_count = 0;
         $checked_out_items = [];
@@ -613,13 +627,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         document.getElementById('checkoutForm')?.addEventListener('submit', function(e) {
             const returnDate = new Date(document.getElementById('expected_return_date').value);
             const now = new Date();
-            
+
             if (returnDate <= now) {
                 e.preventDefault();
                 alert('Expected return date must be in the future.');
                 return false;
             }
-            
+
+            // Check if multi-select mode and at least one item selected
+            const checkboxes = document.querySelectorAll('.equipment-checkbox');
+            if (checkboxes.length > 0) {
+                const checkedBoxes = document.querySelectorAll('.equipment-checkbox:checked');
+                if (checkedBoxes.length === 0) {
+                    e.preventDefault();
+                    alert('Please select at least one equipment item to check out.');
+                    return false;
+                }
+            }
+
             // Show loading state
             const submitBtn = e.target.querySelector('button[type="submit"]');
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';

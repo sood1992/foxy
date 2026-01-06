@@ -47,11 +47,11 @@ $error = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $selected_username = $_POST['requester_name'] ?? '';
+    $selected_username = trim($_POST['requester_name'] ?? '');
     $selected_assets = isset($_POST['selected_equipment']) ? $_POST['selected_equipment'] : [];
     $start_date = $_POST['start_date'] ?? '';
     $end_date = $_POST['end_date'] ?? '';
-    $purpose = $_POST['purpose'] ?? '';
+    $purpose = trim($_POST['purpose'] ?? '');
 
     // Get user email
     $user_email = '';
@@ -62,12 +62,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 
+    // Validation
     if (empty($selected_username)) {
         $error = "Please select a team member.";
     } elseif (empty($selected_assets)) {
         $error = "Please select at least one equipment item.";
     } elseif (empty($start_date) || empty($end_date)) {
         $error = "Please select both start and end dates.";
+    } elseif (strtotime($start_date) < strtotime(date('Y-m-d'))) {
+        $error = "Start date cannot be in the past.";
+    } elseif (strtotime($end_date) < strtotime($start_date)) {
+        $error = "End date must be on or after the start date.";
     } else {
         // Format the equipment list
         $assets_text = implode(', ', $selected_assets);
@@ -528,13 +533,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         <?php if ($success): ?>
         <div class="alert alert-success">
-            <i class="fas fa-check-circle"></i> <?php echo $success; ?>
+            <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($success); ?>
         </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
         <div class="alert alert-danger">
-            <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
+            <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($error); ?>
         </div>
         <?php endif; ?>
 
@@ -742,17 +747,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // Form validation
         document.getElementById('reservationForm').addEventListener('submit', function(e) {
+            // Check team member selection
+            const teamMember = document.querySelector('select[name="requester_name"]').value;
+            if (!teamMember) {
+                e.preventDefault();
+                alert('Please select a team member.');
+                return false;
+            }
+
+            // Check start and end dates
+            const startDate = document.querySelector('input[name="start_date"]').value;
+            const endDate = document.querySelector('input[name="end_date"]').value;
+
+            if (!startDate || !endDate) {
+                e.preventDefault();
+                alert('Please select both start and end dates.');
+                return false;
+            }
+
+            if (new Date(endDate) < new Date(startDate)) {
+                e.preventDefault();
+                alert('End date must be on or after the start date.');
+                return false;
+            }
+
+            // Check equipment selection
             const selected = document.querySelectorAll('.equipment-card.selected');
             if (selected.length === 0) {
                 e.preventDefault();
                 alert('Please select at least one equipment item.');
                 return false;
             }
+
+            // Show loading state
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            submitBtn.disabled = true;
         });
 
         // Set minimum end date based on start date
         document.querySelector('input[name="start_date"]').addEventListener('change', function() {
-            document.querySelector('input[name="end_date"]').min = this.value;
+            const endDateInput = document.querySelector('input[name="end_date"]');
+            endDateInput.min = this.value;
+            // If end date is before start date, reset it
+            if (endDateInput.value && new Date(endDateInput.value) < new Date(this.value)) {
+                endDateInput.value = this.value;
+            }
         });
     </script>
 </body>
