@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Production build (comment out if you want to commit dist)
+# dist/
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# API data (will be created on server)
+api/data/*.json
+!api/data/.gitkeep
+
+# Uploaded files
+api/uploads/**/*
+!api/uploads/.gitkeep
+!api/uploads/assets/.gitkeep
+!api/uploads/transactions/.gitkeep
+
+# Cron logs
+api/logs/

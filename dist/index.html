@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#FFD700" />
+    <meta name="description" content="NeoFox Media Gear Inventory Management System" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>FOXY - NeoFox Gear Inventory</title>
+    <style>
+      /* Initial loading styles */
+      .initial-loader {
+        position: fixed;
+        inset: 0;
+        background: #0d0d0d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      .loader-content {
+        text-align: center;
+      }
+      .loader-logo {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #FFD700;
+        margin-bottom: 1rem;
+        font-family: 'Inter', sans-serif;
+      }
+      .loader-bar {
+        width: 200px;
+        height: 4px;
+        background: #2d2d2d;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .loader-progress {
+        width: 30%;
+        height: 100%;
+        background: #FFD700;
+        border-radius: 2px;
+        animation: loading 1.5s ease-in-out infinite;
+      }
+      @keyframes loading {
+        0% { width: 0; margin-left: 0; }
+        50% { width: 70%; margin-left: 15%; }
+        100% { width: 0; margin-left: 100%; }
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/index-CAzxWrWh.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/vendor-BVoAfGRL.js">
+    <link rel="modulepreload" crossorigin href="./assets/utils-DFn8dfxa.js">
+    <link rel="modulepreload" crossorigin href="./assets/charts-DvgJKZuN.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-DAN6qv24.css">
+  </head>
+  <body>
+    <div id="root">
+      <div class="initial-loader">
+        <div class="loader-content">
+          <div class="loader-logo">FOXY</div>
+          <div class="loader-bar">
+            <div class="loader-progress"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
